@@ -1,0 +1,270 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: train-download-code-dataset
+spec:
+  params:
+    - name: git_repo_url
+    - name: dataset_reference
+  workspaces:
+    - name: pvc
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.54.0-t9kuser-1'
+        name: get-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          
+          git clone $(params.git_repo_url)
+
+          # assethub download $(params.dataset_reference) dataset/  # unimplemented
+          s3cmd get
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: train
+spec:
+  params:
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: request_cpu
+    - name: request_memory
+    - name: limit_cpu
+    - name: limit_memory
+    - name: worker_num
+    - name: pvc_name
+  workspaces: []
+  results: []
+  type: Resource
+  resource:
+    successRules:
+      fieldSelector: status.phase==Succeeded
+    failureRules:
+      fieldSelector: status.phase==Failed
+    manifest: |
+      apiVersion: batch.tensorstack.dev/v1beta1
+      kind: PyTorchTrainingJob
+      metadata:
+        name: $(model-name)--train
+      spec:
+        runPolicy:
+          cleanUpPolicy: Unfinished
+          backoffLimit: 20           # 所有Pod最多共重启20次
+        replicaSpecs:
+          - type: master
+            replicas: 1
+            restartPolicy: OnFailure
+            template:
+              spec:
+                securityContext:
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: /mnt/$(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: pytorch
+                    resources:
+                      requests:
+                        cpu: $(params.request_cpu)
+                        memory: $(params.request_memory)
+                      limits:
+                        cpu: $(params.limit_cpu)
+                        memory: $(params.limit_memory)
+                    volumeMounts:
+                      - mountPath: /mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+          - type: worker
+            replicas: $(params.worker_num)
+            restartPolicy: OnFailure
+            template:
+              spec:
+                securityContext:
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: /mnt/$(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: pytorch
+                    resources:
+                      requests:
+                        cpu: $(params.request_cpu)
+                        memory: $(params.request_memory)
+                      limits:
+                        cpu: $(params.limit_cpu)
+                        memory: $(params.limit_memory)
+                    volumeMounts:
+                      - mountPath: /mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: upload-model
+spec:
+  params:
+    - name: model_location
+  workspaces:
+    - name: pvc
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.54.0-t9kuser-1'
+        name: get-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+
+          # assethub upload $(params.model_location) saved_model/  # unimplemented
+          s3cmd put
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: $(model-name)-train
+  labels: {}
+spec:
+  params:
+    - name: git_repo_url
+    - name: dataset_reference
+    - name: model_location
+  workspaces:
+    - name: pvc
+    - name: api-key
+  results: []
+  type: DAG
+  dag:
+    failureStrategy: StopAllWorkflowTemplates
+    templates:
+      - name: $(model-name)--download-code-dataset
+        workflowTemplateRef: $(model-name)--download-code-dataset
+        params:
+          - name: git_repo_url
+            value: $(params.git_repo_url)
+          - name: dataset_reference
+            value: $(params.dataset_reference)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+        retries: 5
+        when: []
+        dependencies: []
+      - name: $(model-name)--train
+        workflowTemplateRef: $(model-name)--train
+        params:
+          - name: command
+            value: $(params.command)
+          - name: working_dir
+            value: $(params.working_dir)
+          - name: image
+            value: $(params.image)
+          - name: request_cpu
+            value: $(params.request_cpu)
+          - name: request_memory
+            value: $(params.request_memory)
+          - name: limit_cpu
+            value: $(params.limit_cpu)
+          - name: limit_memory
+            value: $(params.limit_memory)
+          - name: worker_num
+            value: $(params.worker_num)
+          - name: pvc_name
+            value: $(params.pvc_name)
+        workspaces:
+          - name: api-key
+            workspace: api-key
+        retries: 0
+        when: []
+        dependencies:
+          - $(model-name)--download-code-dataset
+      - name: $(model-name)--upload-model
+        workflowTemplateRef: $(model-name)--upload-model
+        params:
+          - name: model_location
+            value: $(params.model_location)
+        workspaces: 
+          - name: pvc
+            workspace: pvc
+        retries: 0
+        when: []
+        dependencies:
+          - $(model-name)--train
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: $(model-name)-train
+  labels:
+    batch.tensorstack.dev/workflowTemplate: $(model-name)-train
+spec:
+  params:
+    - name: git_repo_url
+      value: $(git_repo_url)
+    - name: model_location
+      value: $(model_location)
+    - name: dataset_reference
+      value: $(dataset_reference)
+    - name: command
+      value: $(command)
+    - name: working_dir
+      value: $(working_dir)
+    - name: image
+      value: $(image)
+    - name: request_cpu
+      value: $(request_cpu)
+    - name: request_memory
+      value: $(request_memory)
+    - name: limit_cpu
+      value: $(limit_cpu)
+    - name: limit_memory
+      value: $(limit_memory)
+    - name: worker_num
+      value: $(worker_num)
+    - name: pvc_name
+      value: $(pvc_name)
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: $(model-name)-train
+  workspaces:
+    - name: pvc
+      persistentVolumeClaim:
+        claimName: $(model_name)

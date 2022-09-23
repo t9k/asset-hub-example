@@ -1,0 +1,71 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: mnist-torch-evaluate
+spec:
+  params:
+    - name: git_repo_url
+    - name: model_reference
+    - name: dataset_reference
+  workspaces:
+    - name: pvc
+    - name: api-key
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.54.0-t9kuser-1'
+        name: download-code-model-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          
+          git clone $(params.git_repo_url)
+          
+          assethub download $(params.model_reference) mnist-torch/model_state_dict.pt --api-key $(workspaces.api-key.path).apikey
+          assethub download $(params.dataset_reference) mnist-torch/data/ --api-key $(workspaces.api-key.path).apikey
+      - image: 'tsz.io/t9k/pytorch-1.10.0:20220125.1'
+        name: evaluate
+        resources:
+          limits:
+            cpu: 4000m
+            memory: 4Gi
+        script: >
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)/mnist-torch
+
+          python evaluate.py --aimd --api_key_path $(workspaces.api-key.path).apikey --dataset_path ./data \
+              --load_path model_state_dict.pt --upload_location $(params.model_reference)
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: mnist-torch-evaluate
+  labels:
+    batch.tensorstack.dev/workflowTemplate: mnist-torch-evaluate
+spec:
+  params:
+    - name: git_repo_url
+      value: ${server.modify}
+    - name: model_reference
+      value: ${server.modify}
+    - name: dataset_reference
+      value: ${server.modify}
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: mnist-torch-evaluate
+  workspaces:
+    - name: pvc
+      persistentVolumeClaim:
+        claimName: mnist-torch
+    - name: api-key
+      secret:
+        secretName: ${server.modify}

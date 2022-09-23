@@ -1,0 +1,16 @@
+train:
+    files: [yamls/pvc.yaml, yamls/workflow-train.yaml]
+    parameters:
+        model-name: mnist-torch
+        pvc-size: 2Gi 
+        command: "python train.py --aimd --backend gloo --no_cuda --dataset_path ~/dataset --save_path ~/saved_model/model_state_dict.pt"
+        working_dir: mnist-torch
+        image: tsz.io/t9k/pytorch
+        request_cpu: 4000m
+        request_memory: 2Gi
+        limit_cpu: 8000m
+        limit_memory: 4Gi
+        worker_num: 3
+        pvc_name: mnist-torch
+evaluate:
+    files: [yamls/pvc.yaml, yamls/workflow-evaluate.yaml]
