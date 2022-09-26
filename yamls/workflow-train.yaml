@@ -1,18 +1,27 @@
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowTemplate
 metadata:
-  name: train-download-code-dataset
+  name: git-clone
 spec:
   params:
-    - name: git_repo_url
-    - name: dataset_reference
+    - name: url
+      description: URL of the repo to clone from.
+    - name: revision
+      description: Revision to select.
+    - name: depth
+      description: Create a shallow clone with a history truncated to the specified number of commits.
+    - name: subpath
+      description: PVC subpath which the repo is cloned into.
+    - name: ssl_verify
+      description: Set option `http.sslVerify`.
+      default: "true"
   workspaces:
     - name: pvc
   results: []
   type: SeqPod
   seqPod:
     steps:
-      - image: 'tsz.io/t9k/build-sdk:1.54.0-t9kuser-1'
+      - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
         name: get-dataset
         resources:
           limits:
@@ -20,20 +29,71 @@ spec:
             memory: 200Mi
         script: |
           #!/bin/bash
-          set -xe
+          set -xeu
           cd $(workspaces.pvc.path)
-          
-          git clone $(params.git_repo_url)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
 
-          # assethub download $(params.dataset_reference) dataset/  # unimplemented
-          s3cmd get
+          if [ "$(params.ssl_verify)" ]; then
+            git config --global http.sslVerify $(params.ssl_verify)
+          fi
+
+          git clone $(params.url)
+          cd $(basename $(params.url) .git)
+          git checkout $(params.revision)
 
 ---
 
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowTemplate
 metadata:
-  name: train
+  name: download-dataset
+spec:
+  params:
+    - name: reference
+      description: Reference of the dataset to download.
+    - name: subpath
+      description: PVC subpath which the dataset is downloaded to.
+  workspaces:
+    - name: pvc
+    - name: lakefs-secret  # temporary
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
+        name: get-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xeu
+          cd $(workspaces.pvc.path)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
+
+          # unimplemented
+          # assethub download $(params.dataset_reference) dataset/
+
+          # temporary
+          S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
+          if [[ -f "$S3CFG_PATH" ]]; then
+              cp $S3CFG_PATH ~
+          else
+              echo "Failed to get dataset: file .s3cfg not found"
+              exit 1
+          fi
+
+          echo "Downloading dataset from s3://$(params.reference) ..."
+          s3cmd get -r --skip-existing s3://$(params.reference) $(params.subpath)
+          echo "Done."
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: train-pytorch
 spec:
   params:
     - name: command
@@ -57,7 +117,7 @@ spec:
       apiVersion: batch.tensorstack.dev/v1beta1
       kind: PyTorchTrainingJob
       metadata:
-        name: $(model-name)--train
+        name: $(model-name)
       spec:
         runPolicy:
           cleanUpPolicy: Unfinished
@@ -158,7 +218,7 @@ spec:
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowTemplate
 metadata:
-  name: $(model-name)-train
+  name: asset-hub-train-pytorch
   labels: {}
 spec:
   params:
@@ -173,21 +233,32 @@ spec:
   dag:
     failureStrategy: StopAllWorkflowTemplates
     templates:
-      - name: $(model-name)--download-code-dataset
-        workflowTemplateRef: $(model-name)--download-code-dataset
+      - name: git-clone
+        workflowTemplateRef: git-clone
         params:
           - name: git_repo_url
             value: $(params.git_repo_url)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+        retries: 3
+        when: []
+        dependencies: []
+      - name: download-dataset
+        workflowTemplateRef: download-dataset
+        params:
           - name: dataset_reference
             value: $(params.dataset_reference)
         workspaces:
           - name: pvc
             workspace: pvc
-        retries: 5
+          - name: lakefs-secret
+            workspace: lakefs-secret
+        retries: 3
         when: []
         dependencies: []
-      - name: $(model-name)--train
-        workflowTemplateRef: $(model-name)--train
+      - name: train-pytorch
+        workflowTemplateRef: train-pytorch
         params:
           - name: command
             value: $(params.command)
@@ -213,9 +284,10 @@ spec:
         retries: 0
         when: []
         dependencies:
-          - $(model-name)--download-code-dataset
-      - name: $(model-name)--upload-model
-        workflowTemplateRef: $(model-name)--upload-model
+          - git-clone
+          - download-dataset
+      - name: upload-model
+        workflowTemplateRef: upload-model
         params:
           - name: model_location
             value: $(params.model_location)
@@ -225,16 +297,16 @@ spec:
         retries: 0
         when: []
         dependencies:
-          - $(model-name)--train
+          - train-pytorch
 
 ---
 
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowRun
 metadata:
-  name: $(model-name)-train
+  name: $(model-name)
   labels:
-    batch.tensorstack.dev/workflowTemplate: $(model-name)-train
+    batch.tensorstack.dev/workflowTemplate: asset-hub-train-pytorch
 spec:
   params:
     - name: git_repo_url
@@ -263,8 +335,11 @@ spec:
       value: $(pvc_name)
   serviceAccountName: managed-project-sa
   timeout: 1h0m0s
-  workflowTemplateRef: $(model-name)-train
+  workflowTemplateRef: asset-hub-train-pytorch
   workspaces:
     - name: pvc
       persistentVolumeClaim:
         claimName: $(model_name)
+    - name: lakefs-secret  # temporary
+      secret:
+        secretName: $(lakefs-secret-name)

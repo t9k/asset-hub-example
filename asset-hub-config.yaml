@@ -5,7 +5,7 @@ train:
         pvc-size: 2Gi 
         command: "python train.py --aimd --backend gloo --no_cuda --dataset_path ~/dataset --save_path ~/saved_model/model_state_dict.pt"
         working_dir: mnist-torch
-        image: tsz.io/t9k/pytorch
+        image: tsz.io/t9k/pytorch-1.21.1:sdk-0.4.0
         request_cpu: 4000m
         request_memory: 2Gi
         limit_cpu: 8000m
