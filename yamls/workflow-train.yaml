@@ -37,7 +37,9 @@ spec:
             git config --global http.sslVerify $(params.ssl_verify)
           fi
 
-          git clone $(params.url)
+          if [ "$(params.depth)" ]; then depthoption="--depth $(params.depth)"; fi
+
+          git clone $depthoption $(params.url)
           cd $(basename $(params.url) .git)
           git checkout $(params.revision)
 
