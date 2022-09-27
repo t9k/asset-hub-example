@@ -8,10 +8,13 @@ spec:
       description: URL of the repo to clone from.
     - name: revision
       description: Revision to select.
+      default: "master"
     - name: depth
       description: Create a shallow clone with a history truncated to the specified number of commits.
+      default: ""
     - name: subpath
       description: PVC subpath which the repo is cloned into.
+      default: "."
     - name: ssl_verify
       description: Set option `http.sslVerify`.
       default: "true"
@@ -29,7 +32,7 @@ spec:
             memory: 200Mi
         script: |
           #!/bin/bash
-          set -xeu
+          set -xe
           cd $(workspaces.pvc.path)
           mkdir -p $(params.subpath) && cd $(params.subpath)
 
@@ -55,6 +58,7 @@ spec:
       description: Reference of the dataset to download.
     - name: subpath
       description: PVC subpath which the dataset is downloaded to.
+      default: "dataset/"
   workspaces:
     - name: pvc
     - name: lakefs-secret  # temporary
@@ -70,12 +74,12 @@ spec:
             memory: 200Mi
         script: |
           #!/bin/bash
-          set -xeu
+          set -xe
           cd $(workspaces.pvc.path)
           mkdir -p $(params.subpath) && cd $(params.subpath)
 
           # unimplemented
-          # assethub download $(params.dataset_reference) dataset/
+          # assethub download $(params.dataset_reference) .
 
           # temporary
           S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
@@ -87,7 +91,7 @@ spec:
           fi
 
           echo "Downloading dataset from s3://$(params.reference) ..."
-          s3cmd get -r --skip-existing s3://$(params.reference) $(params.subpath)
+          s3cmd get -r --skip-existing s3://$(params.reference) .
           echo "Done."
 
 ---
@@ -137,7 +141,7 @@ spec:
                       - sh
                       - '-c'
                       - $(params.command)
-                    workingDir: /mnt/$(params.working_dir)
+                    workingDir: /t9k/mnt/$(params.working_dir)
                     imagePullPolicy: IfNotPresent
                     image: $(params.image)
                     name: pytorch
@@ -149,7 +153,7 @@ spec:
                         cpu: $(params.limit_cpu)
                         memory: $(params.limit_memory)
                     volumeMounts:
-                      - mountPath: /mnt
+                      - mountPath: /t9k/mnt
                         name: data
                 volumes:
                   - name: data
@@ -167,7 +171,7 @@ spec:
                       - sh
                       - '-c'
                       - $(params.command)
-                    workingDir: /mnt/$(params.working_dir)
+                    workingDir: /t9k/mnt/$(params.working_dir)
                     imagePullPolicy: IfNotPresent
                     image: $(params.image)
                     name: pytorch
@@ -179,7 +183,7 @@ spec:
                         cpu: $(params.limit_cpu)
                         memory: $(params.limit_memory)
                     volumeMounts:
-                      - mountPath: /mnt
+                      - mountPath: /t9k/mnt
                         name: data
                 volumes:
                   - name: data
@@ -194,14 +198,19 @@ metadata:
   name: upload-model
 spec:
   params:
-    - name: model_location
+    - name: new_branch_name
+      default: "new_branch"
+    - name: subpath
+      default: "saved_model/"
   workspaces:
     - name: pvc
+    - name: lakefs-secret  # temporary
+    - name: lakectl-secret  # temporary
   results: []
   type: SeqPod
   seqPod:
     steps:
-      - image: 'tsz.io/t9k/build-sdk:1.54.0-t9kuser-1'
+      - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
         name: get-dataset
         resources:
           limits:
@@ -212,8 +221,30 @@ spec:
           set -xe
           cd $(workspaces.pvc.path)
 
-          # assethub upload $(params.model_location) saved_model/  # unimplemented
-          s3cmd put
+          # unimplemented
+          # assethub upload $(model-name) $(params.subpath)
+          
+          # temporary
+          S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
+          if [[ -f "$S3CFG_PATH" ]]; then
+              cp $S3CFG_PATH ~
+          else
+              echo "Failed to upload model: file .s3cfg not found"
+              exit 1
+          fi
+
+          LAKETCL_PATH="$(workspaces.lakectl-secret.path)/.lakectl.yaml"
+          if [[ -f "$LAKETCL_PATH" ]]; then
+              cp $LAKETCL_PATH ~
+          else
+              echo "Failed to upload model: file .lakectl.yaml not found"
+              exit 1
+          fi
+
+          echo "Uploading model to s3://$(model-name) ..."
+          lakectl branch create lakefs://$(model-name)/$(params.new_branch_name) --source lakefs://mnist-torch/main
+          s3cmd put -r $(params.subpath) s3://$(model-name)/$(params.new_branch_name)/
+          echo "Done."
 
 ---
 
@@ -226,10 +257,20 @@ spec:
   params:
     - name: git_repo_url
     - name: dataset_reference
-    - name: model_location
+    - name: new_branch_name
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: request_cpu
+    - name: request_memory
+    - name: limit_cpu
+    - name: limit_memory
+    - name: worker_num
+    - name: pvc_name
   workspaces:
     - name: pvc
-    - name: api-key
+    - name: lakefs-secret
+    - name: lakectl-secret
   results: []
   type: DAG
   dag:
@@ -238,7 +279,7 @@ spec:
       - name: git-clone
         workflowTemplateRef: git-clone
         params:
-          - name: git_repo_url
+          - name: url
             value: $(params.git_repo_url)
         workspaces:
           - name: pvc
@@ -249,7 +290,7 @@ spec:
       - name: download-dataset
         workflowTemplateRef: download-dataset
         params:
-          - name: dataset_reference
+          - name: reference
             value: $(params.dataset_reference)
         workspaces:
           - name: pvc
@@ -280,9 +321,7 @@ spec:
             value: $(params.worker_num)
           - name: pvc_name
             value: $(params.pvc_name)
-        workspaces:
-          - name: api-key
-            workspace: api-key
+        workspaces: []
         retries: 0
         when: []
         dependencies:
@@ -291,11 +330,15 @@ spec:
       - name: upload-model
         workflowTemplateRef: upload-model
         params:
-          - name: model_location
-            value: $(params.model_location)
+          - name: new_branch_name
+            value: $(params.new_branch_name)
         workspaces: 
           - name: pvc
             workspace: pvc
+          - name: lakefs-secret
+            workspace: lakefs-secret
+          - name: lakectl-secret
+            workspace: lakectl-secret
         retries: 0
         when: []
         dependencies:
@@ -312,36 +355,39 @@ metadata:
 spec:
   params:
     - name: git_repo_url
-      value: $(git_repo_url)
-    - name: model_location
-      value: $(model_location)
+      value: $(git-repo-url)
     - name: dataset_reference
-      value: $(dataset_reference)
+      value: $(dataset-reference)
+    - name: new_branch_name
+      value: $(new-branch-name)
     - name: command
       value: $(command)
     - name: working_dir
-      value: $(working_dir)
+      value: $(working-dir)
     - name: image
       value: $(image)
     - name: request_cpu
-      value: $(request_cpu)
+      value: $(request-cpu)
     - name: request_memory
-      value: $(request_memory)
+      value: $(request-memory)
     - name: limit_cpu
-      value: $(limit_cpu)
+      value: $(limit-cpu)
     - name: limit_memory
-      value: $(limit_memory)
+      value: $(limit-memory)
     - name: worker_num
-      value: $(worker_num)
+      value: $(worker-num)
     - name: pvc_name
-      value: $(pvc_name)
+      value: $(pvc-name)
   serviceAccountName: managed-project-sa
   timeout: 1h0m0s
   workflowTemplateRef: asset-hub-train-pytorch
   workspaces:
     - name: pvc
       persistentVolumeClaim:
-        claimName: $(model_name)
+        claimName: $(model-name)
     - name: lakefs-secret  # temporary
       secret:
         secretName: $(lakefs-secret-name)
+    - name: lakectl-secret  # temporary
+      secret:
+        secretName: lakectl

@@ -44,7 +44,7 @@ parser.add_argument(
     help='URL of AIMD server. Required if --aimd is set.')
 parser.add_argument('--log_dir',
                     type=str,
-                    default='/mnt/log',
+                    default=None,
                     help='Path of the TensorBoard log directory.')
 parser.add_argument('--no_cuda',
                     action='store_true',
@@ -208,8 +208,7 @@ if __name__ == '__main__':
 
     if args.aimd and rank == 0:
         from t9k import aimd
-        aimd.CONFIG['host'] = args.host
-        aimd.CONFIG['api_key'] = args.api_key
+        aimd.login(host=args.host, api_key=args.api_key)
 
         trial = aimd.create_trial(trial_name=args.trial_name,
                                   folder_path=args.folder_path)
