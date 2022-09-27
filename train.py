@@ -257,7 +257,7 @@ if __name__ == '__main__':
         dirname = os.path.dirname(args.save_path)
         if not os.path.exists(dirname):
             os.makedirs(dirname)
-        torch.save(model.state_dict(), args.save_path)
+        torch.save(model.module.state_dict(), args.save_path)
 
     if args.aimd and rank == 0:
         trial.finish()
