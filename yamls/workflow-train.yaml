@@ -67,7 +67,7 @@ spec:
   seqPod:
     steps:
       - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
-        name: get-dataset
+        name: download-dataset
         resources:
           limits:
             cpu: 100m
@@ -79,14 +79,14 @@ spec:
           mkdir -p $(params.subpath) && cd $(params.subpath)
 
           # unimplemented
-          # assethub download $(params.dataset_reference) .
+          # assethub download $(params.reference) .
 
           # temporary
           S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
           if [[ -f "$S3CFG_PATH" ]]; then
               cp $S3CFG_PATH ~
           else
-              echo "Failed to get dataset: file .s3cfg not found"
+              echo "Failed to download dataset: file .s3cfg not found"
               exit 1
           fi
 
@@ -349,7 +349,7 @@ spec:
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowRun
 metadata:
-  name: $(model-name)
+  name: $(model-name)-train
   labels:
     batch.tensorstack.dev/workflowTemplate: asset-hub-train-pytorch
 spec:

@@ -176,7 +176,7 @@ if __name__ == '__main__':
             os.getenv('NVIDIA_VISIBLE_DEVICES')))
         logger.info('T9K_GPU_PERCENT: {}'.format(os.getenv('T9K_GPU_PERCENT')))
         logger.info('Device Name {}'.format(torch.cuda.get_device_name()))
-    device = torch.device("cuda" if use_cuda else "cpu")
+    device = torch.device('cuda' if use_cuda else 'cpu')
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
     logger.info('Using distributed PyTorch with {} backend'.format(
