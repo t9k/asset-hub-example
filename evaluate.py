@@ -109,7 +109,7 @@ if __name__ == '__main__':
     }
 
     model = Net().to(device)
-    model.load_state_dict(args.load_path)
+    model.load_state_dict(torch.load(args.load_path))
     criterion = nn.CrossEntropyLoss()
 
     transform = transforms.Compose(
