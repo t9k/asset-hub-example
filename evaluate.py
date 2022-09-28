@@ -77,7 +77,7 @@ def test():
     test_accuracy = correct / len(test_loader.dataset)
 
     metrics = {'loss': test_loss, 'accuracy': test_accuracy}
-    with open(args.output_path, 'wt') as f:
+    with open(output_path, 'wt') as f:
         f.write(json.dumps(metrics))
 
 
