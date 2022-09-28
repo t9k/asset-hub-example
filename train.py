@@ -28,7 +28,7 @@ parser.add_argument(
     help='Distributed backend',
     choices=[dist.Backend.GLOO, dist.Backend.NCCL, dist.Backend.MPI],
     default=dist.Backend.GLOO)
-parser.add_argument('--dataset_path',
+parser.add_argument('--dataset_dir',
                     type=str,
                     default='./data',
                     help='Path of the dataset.')
@@ -167,7 +167,7 @@ def test(val=False, epoch=None):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    args.dataset_path = os.path.expanduser(args.dataset_path)
+    args.dataset_dir = os.path.expanduser(args.dataset_dir)
     args.save_path = os.path.expanduser(args.save_path)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -218,13 +218,13 @@ if __name__ == '__main__':
     transform = transforms.Compose(
         [transforms.ToTensor(),
          transforms.Normalize((0.5), (0.5))])
-    train_dataset = datasets.MNIST(root=args.dataset_path,
+    train_dataset = datasets.MNIST(root=args.dataset_dir,
                                    train=True,
                                    download=False,
                                    transform=transform)
     train_dataset, val_dataset = torch.utils.data.random_split(
         train_dataset, [48000, 12000])
-    test_dataset = datasets.MNIST(root=args.dataset_path,
+    test_dataset = datasets.MNIST(root=args.dataset_dir,
                                   train=False,
                                   download=False,
                                   transform=transform)

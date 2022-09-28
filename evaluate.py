@@ -10,10 +10,10 @@ import torch.nn.functional as F
 from torchvision import datasets, transforms
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset_path',
+parser.add_argument('--dataset_dir',
                     type=str,
                     default='./data',
-                    help='Path of the dataset.')
+                    help='Path of directory of the dataset.')
 parser.add_argument('--no_cuda',
                     action='store_true',
                     default=False,
@@ -22,10 +22,10 @@ parser.add_argument('--load_path',
                     type=str,
                     default=None,
                     help='Load path of the trained model.')
-parser.add_argument('--output_path',
+parser.add_argument('--output_dir',
                     type=str,
-                    default=None,
-                    help='Output path of the evaluation metrics.')
+                    default='./metrics',
+                    help='Path of output directory of the evaluation metrics.')
 
 logger = logging.getLogger('print')
 logger.setLevel(logging.INFO)
@@ -83,11 +83,12 @@ def test():
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    args.dataset_path = os.path.expanduser(args.dataset_path)
+    args.dataset_dir = os.path.expanduser(args.dataset_dir)
     args.load_path = os.path.expanduser(args.load_path)
-    args.output_path = os.path.expanduser(args.output_path)
+    args.output_dir = os.path.expanduser(args.output_dir)
+    os.makedirs(args.output_dir, exist_ok=True)
     output_path = os.path.join(
-        args.output_path,
+        args.output_dir,
         datetime.now().strftime('%y%m%d_%H%M%S') + '.json')
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -115,7 +116,7 @@ if __name__ == '__main__':
     transform = transforms.Compose(
         [transforms.ToTensor(),
          transforms.Normalize((0.5), (0.5))])
-    test_dataset = datasets.MNIST(root=args.dataset_path,
+    test_dataset = datasets.MNIST(root=args.dataset_dir,
                                   train=False,
                                   download=False,
                                   transform=transform)

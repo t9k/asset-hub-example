@@ -260,7 +260,7 @@ spec:
           fi
 
           echo "Uploading model to s3://$(model-name) ..."
-          s3cmd put -r $(params.subpath) s3://$(params.reference)metrics
+          s3cmd put -r $(params.subpath) s3://$(params.reference)metrics/
           echo "Done."
 
 ---
