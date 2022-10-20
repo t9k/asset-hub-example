@@ -1,0 +1,45 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: download-dataset
+spec:
+  params:
+    - name: reference
+      description: Reference of the dataset to download.
+    - name: subpath
+      description: PVC subpath which the dataset is downloaded to.
+      default: "dataset/"
+  workspaces:
+    - name: pvc
+    - name: lakefs-secret # temporary
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: "tsz.io/t9k/build-sdk:1.60.0-t9kuser"
+        name: download-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
+
+          # unimplemented
+          # assethub download $(params.reference) .
+
+          # temporary
+          S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
+          if [[ -f "$S3CFG_PATH" ]]; then
+              cp $S3CFG_PATH ~
+          else
+              echo "Failed to download dataset: file .s3cfg not found"
+              exit 1
+          fi
+
+          echo "Downloading dataset from s3://$(params.reference) ..."
+          s3cmd get -r --skip-existing s3://$(params.reference) .
+          echo "Done."

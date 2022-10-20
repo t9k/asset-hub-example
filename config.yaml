@@ -1,0 +1,4 @@
+train:
+  files: [yamls-v2/pvc.yaml, yamls-v2/workflow-train.yaml]
+evaluate:
+  files: [yamls-v2/pvc.yaml, yamls-v2/workflow-evaluate.yaml]

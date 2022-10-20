@@ -1,0 +1,424 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: git-clone
+spec:
+  params:
+    - name: url
+      description: URL of the repo to clone from.
+    - name: revision
+      description: Revision to select.
+      default: "master"
+    - name: depth
+      description: Create a shallow clone with a history truncated to the specified number of commits.
+      default: ""
+    - name: subpath
+      description: PVC subpath which the repo is cloned into.
+      default: "."
+    - name: ssl_verify
+      description: Set option `http.sslVerify`.
+      default: "true"
+  workspaces:
+    - name: pvc
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
+        name: get-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
+
+          if [ "$(params.ssl_verify)" ]; then
+            git config --global http.sslVerify $(params.ssl_verify)
+          fi
+
+          if [ "$(params.depth)" ]; then depthoption="--depth $(params.depth)"; fi
+
+          git clone $depthoption $(params.url)
+          cd $(basename $(params.url) .git)
+          git checkout $(params.revision)
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: download-model
+spec:
+  params:
+    - name: reference
+      description: Reference of the model to download.
+    - name: subpath
+      description: PVC subpath which the dataset is downloaded to.
+      default: "saved_model/"
+  workspaces:
+    - name: pvc
+    - name: lakefs-secret  # temporary
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
+        name: download
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
+
+          # unimplemented
+          # assethub download $(params.reference) .
+
+          # temporary
+          S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
+          if [[ -f "$S3CFG_PATH" ]]; then
+              cp $S3CFG_PATH ~
+          else
+              echo "Failed to download model: file .s3cfg not found"
+              exit 1
+          fi
+
+          echo "Downloading model from s3://$(params.reference) ..."
+          s3cmd get -r --skip-existing s3://$(params.reference) .
+          echo "Done."
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: download-dataset
+spec:
+  params:
+    - name: reference
+      description: Reference of the dataset to download.
+    - name: subpath
+      description: PVC subpath which the dataset is downloaded to.
+      default: "dataset/"
+  workspaces:
+    - name: pvc
+    - name: lakefs-secret  # temporary
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
+        name: download-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
+
+          # unimplemented
+          # assethub download $(params.reference) .
+
+          # temporary
+          S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
+          if [[ -f "$S3CFG_PATH" ]]; then
+              cp $S3CFG_PATH ~
+          else
+              echo "Failed to download dataset: file .s3cfg not found"
+              exit 1
+          fi
+
+          echo "Downloading dataset from s3://$(params.reference) ..."
+          s3cmd get -r --skip-existing s3://$(params.reference) .
+          echo "Done."
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: train-pytorch
+spec:
+  params:
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: request_cpu
+    - name: request_memory
+    - name: limit_cpu
+    - name: limit_memory
+    - name: worker_num
+    - name: pvc_name
+  workspaces: []
+  results: []
+  type: Resource
+  resource:
+    successRules:
+      fieldSelector: status.phase==Succeeded
+    failureRules:
+      fieldSelector: status.phase==Failed
+    manifest: |
+      apiVersion: batch.tensorstack.dev/v1beta1
+      kind: PyTorchTrainingJob
+      metadata:
+        name: $(model-name)
+      spec:
+        runPolicy:
+          cleanUpPolicy: Unfinished
+          backoffLimit: 20           # 所有Pod最多共重启20次
+        replicaSpecs:
+          - type: master
+            replicas: 1
+            restartPolicy: OnFailure
+            template:
+              spec:
+                securityContext:
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: /t9k/mnt/$(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: pytorch
+                    resources:
+                      requests:
+                        cpu: $(params.request_cpu)
+                        memory: $(params.request_memory)
+                      limits:
+                        cpu: $(params.limit_cpu)
+                        memory: $(params.limit_memory)
+                    volumeMounts:
+                      - mountPath: /t9k/mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: upload-evaluation-metrics
+spec:
+  params:
+    - name: reference
+      description: Reference of the model to upload evaluation metrics.
+    - name: subpath
+      default: "metrics/"
+  workspaces:
+    - name: pvc
+    - name: lakefs-secret  # temporary
+    - name: lakectl-secret  # temporary
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: 'tsz.io/t9k/build-sdk:1.60.0-t9kuser'
+        name: get-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+
+          # unimplemented
+          # assethub upload $(model-name) $(params.subpath)
+          
+          # temporary
+          S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
+          if [[ -f "$S3CFG_PATH" ]]; then
+              cp $S3CFG_PATH ~
+          else
+              echo "Failed to upload model: file .s3cfg not found"
+              exit 1
+          fi
+
+          LAKETCL_PATH="$(workspaces.lakectl-secret.path)/.lakectl.yaml"
+          if [[ -f "$LAKETCL_PATH" ]]; then
+              cp $LAKETCL_PATH ~
+          else
+              echo "Failed to upload model: file .lakectl.yaml not found"
+              exit 1
+          fi
+
+          echo "Uploading model to s3://$(model-name) ..."
+          s3cmd put -r $(params.subpath) s3://$(params.reference)metrics/
+          echo "Done."
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: asset-hub-evaluate-pytorch
+  labels: {}
+spec:
+  params:
+    - name: git_repo_url
+    - name: model_reference
+    - name: dataset_reference
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: request_cpu
+    - name: request_memory
+    - name: limit_cpu
+    - name: limit_memory
+    - name: worker_num
+    - name: pvc_name
+  workspaces:
+    - name: pvc
+    - name: lakefs-secret
+    - name: lakectl-secret
+  results: []
+  type: DAG
+  dag:
+    failureStrategy: StopAllWorkflowTemplates
+    templates:
+      - name: git-clone
+        workflowTemplateRef: git-clone
+        params:
+          - name: url
+            value: $(params.git_repo_url)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+        retries: 3
+        when: []
+        dependencies: []
+      - name: download-model
+        workflowTemplateRef: download-model
+        params:
+          - name: reference
+            value: $(params.model_reference)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+          - name: lakefs-secret
+            workspace: lakefs-secret
+        retries: 3
+        when: []
+        dependencies: []
+      - name: download-dataset
+        workflowTemplateRef: download-dataset
+        params:
+          - name: reference
+            value: $(params.dataset_reference)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+          - name: lakefs-secret
+            workspace: lakefs-secret
+        retries: 3
+        when: []
+        dependencies: []
+      - name: train-pytorch
+        workflowTemplateRef: train-pytorch
+        params:
+          - name: command
+            value: $(params.command)
+          - name: working_dir
+            value: $(params.working_dir)
+          - name: image
+            value: $(params.image)
+          - name: request_cpu
+            value: $(params.request_cpu)
+          - name: request_memory
+            value: $(params.request_memory)
+          - name: limit_cpu
+            value: $(params.limit_cpu)
+          - name: limit_memory
+            value: $(params.limit_memory)
+          - name: worker_num
+            value: $(params.worker_num)
+          - name: pvc_name
+            value: $(params.pvc_name)
+        workspaces: []
+        retries: 0
+        when: []
+        dependencies:
+          - git-clone
+          - download-model
+          - download-dataset
+      - name: upload-evaluation-metrics
+        workflowTemplateRef: upload-evaluation-metrics
+        params:
+          - name: reference
+            value: $(params.model_reference)
+        workspaces: 
+          - name: pvc
+            workspace: pvc
+          - name: lakefs-secret
+            workspace: lakefs-secret
+          - name: lakectl-secret
+            workspace: lakectl-secret
+        retries: 0
+        when: []
+        dependencies:
+          - train-pytorch
+
+---
+
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: $(model-name)-evaluate
+  labels:
+    batch.tensorstack.dev/workflowTemplate: asset-hub-train-pytorch
+spec:
+  params:
+    - name: git_repo_url
+      value: $(git-repo-url)
+    - name: model_reference
+      value: $(model-reference)
+    - name: dataset_reference
+      value: $(dataset-reference)
+    - name: command
+      value: $(command)
+    - name: working_dir
+      value: $(working-dir)
+    - name: image
+      value: $(image)
+    - name: request_cpu
+      value: $(request-cpu)
+    - name: request_memory
+      value: $(request-memory)
+    - name: limit_cpu
+      value: $(limit-cpu)
+    - name: limit_memory
+      value: $(limit-memory)
+    - name: worker_num
+      value: $(worker-num)
+    - name: pvc_name
+      value: $(pvc-name)
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: asset-hub-evaluate-pytorch
+  workspaces:
+    - name: pvc
+      persistentVolumeClaim:
+        claimName: $(model-name)
+    - name: lakefs-secret  # temporary
+      secret:
+        secretName: $(lakefs-secret-name)
+    - name: lakectl-secret  # temporary
+      secret:
+        secretName: lakectl

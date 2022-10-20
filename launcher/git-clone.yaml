@@ -1,0 +1,51 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: git-clone
+spec:
+  params:
+    - name: url
+      description: URL of the repo to clone from.
+    - name: revision
+      description: Revision to select.
+      default: "master"
+    - name: depth
+      description: Create a shallow clone with a history truncated to the specified number of commits.
+      default: ""
+    - name: subpath
+      description: PVC subpath which the repo is cloned into.
+      default: "."
+    - name: ssl_verify
+      description: Set option `http.sslVerify`.
+      default: "true"
+  workspaces:
+    - name: pvc
+  results:
+    - name: repo-name
+      description: name of git repository
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: "tsz.io/t9k/build-sdk:1.60.0-t9kuser"
+        name: get-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
+
+          if [ "$(params.ssl_verify)" ]; then
+            git config --global http.sslVerify $(params.ssl_verify)
+          fi
+
+          if [ "$(params.depth)" ]; then depthoption="--depth $(params.depth)"; fi
+
+          git clone $depthoption $(params.url)
+          cd $(basename $(params.url) .git)
+          git checkout $(params.revision)
+
+          echo $(basename $(params.url) .git) > $(results.repo-name.path)
