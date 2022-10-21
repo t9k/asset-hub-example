@@ -18,6 +18,9 @@ spec:
     - name: ssl_verify
       description: Set option `http.sslVerify`.
       default: "true"
+    - name: token
+      description: Git registry access token.
+      default: ""
   workspaces:
     - name: pvc
   results:
@@ -44,8 +47,14 @@ spec:
 
           if [ "$(params.depth)" ]; then depthoption="--depth $(params.depth)"; fi
 
-          git clone $depthoption $(params.url)
-          cd $(basename $(params.url) .git)
+          url=$(params.url)
+          # not support fine-grained token
+          if [[ "$(params.token)" != "" ]]; then
+            url=$(echo $(params.url)| sed "s#\(.*\)://#\1://${params.token}@#")
+          fi
+
+          git clone $depthoption "$url"
+          cd $(basename $(params.url))
           git checkout $(params.revision)
 
-          echo $(basename $(params.url) .git) > $(results.repo-name.path)
+          echo -n $(basename $(params.url)) > $(results.repo-name.path)

@@ -7,13 +7,15 @@ spec:
   params:
     - name: git_repo_url
     - name: dataset_reference
+    - name: git_subpath
     - name: new_branch_name
     - name: pvc_name
     - name: model_id
+    - name: revision
+    - name: git_token
   workspaces:
     - name: pvc
-    - name: lakefs-secret
-    - name: lakectl-secret
+    - name: t9k-sdk-config
   results: []
   type: DAG
   dag:
@@ -24,6 +26,10 @@ spec:
         params:
           - name: url
             value: $(params.git_repo_url)
+          - name: revision
+            value: $(params.revision)
+          - name: token
+            value: $(params.git_token)
         workspaces:
           - name: pvc
             workspace: pvc
@@ -38,8 +44,8 @@ spec:
         workspaces:
           - name: pvc
             workspace: pvc
-          - name: lakefs-secret
-            workspace: lakefs-secret
+          - name: t9k-sdk-config
+            workspace: t9k-sdk-config
         retries: 3
         when: []
         dependencies: []
@@ -47,7 +53,7 @@ spec:
         workflowTemplateRef: apply-k8s-yaml
         params:
           - name: subpath
-            value: $(tasks.git-clone.results.repo-name)
+            value: "$(templates.git-clone.results.repo-name)/$(params.git_subpath)"
           - name: pvc_name
             value: $(params.pvc_name)
         workspaces:
@@ -63,47 +69,22 @@ spec:
         params:
           - name: new_branch_name
             value: $(params.new_branch_name)
-          - name: model_id
+          - name: reference
             value: $(params.model_id)
+          - name: git_repo_url
+            value: $(params.git_repo_url)
+          - name: git_subpath
+            value: $(params.git_subpath)
+          - name: dataset_reference
+            value: $(params.dataset_reference)
+          - name: revision
+            value: $(params.revision)
         workspaces:
           - name: pvc
             workspace: pvc
-          - name: lakefs-secret
-            workspace: lakefs-secret
-          - name: lakectl-secret
-            workspace: lakectl-secret
+          - name: t9k-sdk-config
+            workspace: t9k-sdk-config
         retries: 0
         when: []
         dependencies:
           - apply-k8s-yaml
-
----
-apiVersion: batch.tensorstack.dev/v1beta1
-kind: WorkflowRun
-metadata:
-  name: retrain-hash-code
-  labels:
-    batch.tensorstack.dev/workflowTemplate: asset-hub-train-pytorch
-spec:
-  params:
-    - name: git_repo_url
-      value: https://github.com/t9k/asset-hub-example
-    - name: dataset_reference
-      value: mnist/main/
-    - name: new_branch_name
-      value: new-branch
-    - name: pvc_name
-      value: retrain-pvc
-  serviceAccountName: managed-project-sa
-  timeout: 1h0m0s
-  workflowTemplateRef: train-pytorch
-  workspaces:
-    - name: pvc
-      persistentVolumeClaim:
-        claimName: retrain-pvc
-    - name: lakefs-secret # temporary
-      secret:
-        secretName: lakefs
-    - name: lakectl-secret # temporary
-      secret:
-        secretName: lakectl

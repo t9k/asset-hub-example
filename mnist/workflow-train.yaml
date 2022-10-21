@@ -1,0 +1,125 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: train-pytorch
+spec:
+  params:
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: request_cpu
+    - name: request_memory
+    - name: limit_cpu
+    - name: limit_memory
+    - name: worker_num
+    - name: pvc_name
+  workspaces: []
+  results: []
+  type: Resource
+  resource:
+    successRules:
+      fieldSelector: status.phase==Succeeded
+    failureRules:
+      fieldSelector: status.phase==Failed
+    manifest: |
+      apiVersion: batch.tensorstack.dev/v1beta1
+      kind: PyTorchTrainingJob
+      metadata:
+        generateName: model-retrain-
+      spec:
+        runPolicy:
+          cleanUpPolicy: Unfinished
+          backoffLimit: 20           # 所有Pod最多共重启20次
+        replicaSpecs:
+          - type: master
+            replicas: 1
+            restartPolicy: OnFailure
+            template:
+              spec:
+                securityContext:
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: /t9k/mnt/$(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: pytorch
+                    resources:
+                      requests:
+                        cpu: $(params.request_cpu)
+                        memory: $(params.request_memory)
+                      limits:
+                        cpu: $(params.limit_cpu)
+                        memory: $(params.limit_memory)
+                    volumeMounts:
+                      - mountPath: /t9k/mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+          - type: worker
+            replicas: $(params.worker_num)
+            restartPolicy: OnFailure
+            template:
+              spec:
+                securityContext:
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: /t9k/mnt/$(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: pytorch
+                    resources:
+                      requests:
+                        cpu: $(params.request_cpu)
+                        memory: $(params.request_memory)
+                      limits:
+                        cpu: $(params.limit_cpu)
+                        memory: $(params.limit_memory)
+                    volumeMounts:
+                      - mountPath: /t9k/mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+
+---
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: train-pytorch
+  labels:
+    batch.tensorstack.dev/workflowTemplate: train-pytorch
+spec:
+  params:
+    - name: command
+      value: "python train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ~/dataset --save_path ~/model/model_state_dict.pt"
+    - name: working_dir
+      value: asset-hub-example/mnist
+    - name: image
+      value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
+    - name: request_cpu
+      value: 4000m
+    - name: request_memory
+      value: 2Gi
+    - name: limit_cpu
+      value: 8000m
+    - name: limit_memory
+      value: 4Gi
+    - name: worker_num
+      value: "3"
+    - name: pvc_name
+      value: $(pvc-name)
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: train-pytorch
+  workspaces: []

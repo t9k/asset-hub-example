@@ -1,0 +1,62 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: apply-k8s-yaml
+spec:
+  params:
+    - name: subpath
+      description: PVC subpath in which the git repository is cloned.
+    - name: namespace
+      description: Namespace in which the resources are created.
+      default: demo
+    - name: pvc_name
+      description: PVC name.
+  workspaces:
+    - name: pvc
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: "tsz.io/t9k/kubectl:10.25"
+        name: kubectl-apply
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          cd $(params.subpath)
+
+          while read -r line; do
+            yq '. | select(.kind != "WorkflowRun")'  ${line} | sed 's/$(pvc-name)/$(params.pvc_name)/' | kubectl apply -n $(params.namespace) -f -
+            runs=$(yq 'select(.kind == "WorkflowRun") | del(.metadata.name) | .metadata.generateName = "training-"' ${line} | sed 's/$(pvc-name)/$(params.pvc_name)/' | kubectl create -n $(params.namespace) -f - | awk -F'[/ ]' '{ print $2 }')
+            
+            echo "Create runs: ${runs[@]}"
+            allRun+=(${runs[@]})
+          done < <(yq '.train.files[]' config.yaml)
+
+          exit_code=0
+          for run in "${allRun[@]}"
+          do
+            echo "wait for run($run) completed"
+            while read -r line; do
+              s=$(awk '{print $2}' <<< $line)
+              if [[ $s == "Succeeded" ]]; then
+                break
+              fi
+              if [[ $s == "Failed" ]]; then
+                exit_code=1
+                break
+              fi
+            done < <(kubectl get workflowruns.batch.tensorstack.dev ${run} -n demo -w)
+            if [[ $exit_code -ne 0 ]]; then
+              break
+            fi
+          done
+
+          # while read -r line; do
+          #   kubectl delete -n $(params.namespace) -f ${line:2}
+          # done < <(yq r config.yaml train.files)
+          exit $exit_code

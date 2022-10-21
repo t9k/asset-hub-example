@@ -25,7 +25,7 @@ spec:
       apiVersion: batch.tensorstack.dev/v1beta1
       kind: PyTorchTrainingJob
       metadata:
-        generateName: model-retrain
+        generateName: model-retrain-
       spec:
         runPolicy:
           cleanUpPolicy: Unfinished
@@ -104,7 +104,7 @@ spec:
     - name: command
       value: "python train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ~/dataset --save_path ~/saved_model/model_state_dict.pt"
     - name: working_dir
-      value: asset-hub-example
+      value: asset-hub-example/mnist
     - name: image
       value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
     - name: request_cpu

@@ -7,16 +7,16 @@ spec:
     - name: reference
       description: Reference of the dataset to download.
     - name: subpath
-      description: PVC subpath which the dataset is downloaded to.
+      description: PVC subpath that the dataset is downloaded to.
       default: "dataset/"
   workspaces:
     - name: pvc
-    - name: lakefs-secret # temporary
+    - name: t9k-sdk-config
   results: []
   type: SeqPod
   seqPod:
     steps:
-      - image: "tsz.io/t9k/build-sdk:1.60.0-t9kuser"
+      - image: "tsz.io/t9k/build-sdk:20221101-2"
         name: download-dataset
         resources:
           limits:
@@ -28,18 +28,15 @@ spec:
           cd $(workspaces.pvc.path)
           mkdir -p $(params.subpath) && cd $(params.subpath)
 
-          # unimplemented
-          # assethub download $(params.reference) .
-
-          # temporary
-          S3CFG_PATH="$(workspaces.lakefs-secret.path)/.s3cfg"
-          if [[ -f "$S3CFG_PATH" ]]; then
-              cp $S3CFG_PATH ~
+          CONFIG_PATH="$(workspaces.t9k-sdk-config.path)/t9k-sdk-config.yaml"
+          if [[ -f "$CONFIG_PATH" ]]; then
+              mkdir ~/.t9k
+              cp $CONFIG_PATH ~/.t9k
           else
-              echo "Failed to download dataset: file .s3cfg not found"
+              echo "Failed to download dataset: file t9k-sdk-config.yaml not found"
               exit 1
           fi
 
-          echo "Downloading dataset from s3://$(params.reference) ..."
-          s3cmd get -r --skip-existing s3://$(params.reference) .
+          echo "Downloading dataset from $(params.reference) ..."
+          ah download $(params.reference)
           echo "Done."
