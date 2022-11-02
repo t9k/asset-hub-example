@@ -1,0 +1,42 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: download-dataset
+spec:
+  params:
+    - name: reference
+      description: Reference of the dataset to download.
+    - name: subpath
+      description: PVC subpath that the dataset is downloaded to.
+      default: "dataset/"
+  workspaces:
+    - name: pvc
+    - name: t9k-sdk-config
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: "tsz.io/t9k/build-sdk:20221101-2"
+        name: download-dataset
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+          mkdir -p $(params.subpath) && cd $(params.subpath)
+
+          CONFIG_PATH="$(workspaces.t9k-sdk-config.path)/t9k-sdk-config.yaml"
+          if [[ -f "$CONFIG_PATH" ]]; then
+              mkdir ~/.t9k
+              cp $CONFIG_PATH ~/.t9k
+          else
+              echo "Failed to download dataset: file t9k-sdk-config.yaml not found"
+              exit 1
+          fi
+
+          echo "Downloading dataset from $(params.reference) ..."
+          ah download $(params.reference)
+          echo "Done."

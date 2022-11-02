@@ -1,0 +1,66 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: upload-model
+spec:
+  params:
+    - name: git_repo_url
+      description: URL of the git repo to store code.
+    - name: git_subpath
+      description: Git repo subpath.
+    - name: revision
+      description: Git revision.
+      default: "master"
+    - name: dataset_reference
+      description: Reference of the dataset.
+    - name: reference
+      description: Reference of the model to upload.
+    - name: new_branch_name
+      description: Name of the new branch of model.
+      default: "new_branch"
+    - name: subpath
+      description: PVC subpath under which the files are uploaded.
+      default: "model/"
+  workspaces:
+    - name: pvc
+    - name: t9k-sdk-config
+  results: []
+  type: SeqPod
+  seqPod:
+    steps:
+      - image: "tsz.io/t9k/build-sdk:20221101-2"
+        name: upload-model
+        resources:
+          limits:
+            cpu: 100m
+            memory: 200Mi
+        script: |
+          #!/bin/bash
+          set -xe
+          cd $(workspaces.pvc.path)
+
+          CONFIG_PATH="$(workspaces.t9k-sdk-config.path)/t9k-sdk-config.yaml"
+          if [[ -f "$CONFIG_PATH" ]]; then
+              mkdir ~/.t9k
+              cp $CONFIG_PATH ~/.t9k
+          else
+              echo "Failed to upload model: file t9k-sdk-config.yaml not found"
+              exit 1
+          fi
+
+          echo "Uploading model to s3://$(params.model_id) ..."
+          ah create branch $(params.reference):$(params.new_branch_name)
+          ah commit $(params.reference):$(params.new_branch_name) -m "retrain" -a $(params.subpath)
+
+          echo "{
+            \"code\": {
+              \"git\": {
+                \"repo\": \"$(params.git_repo_url)\",
+                \"revision\": \"$(params.revision)\",
+                \"subpath\": \"$(params.git_subpath)\"
+              }
+            },
+            \"dataset\": \"$(params.dataset_reference)\"
+          }" > asset-hub.metadata
+          ah commit $(params.reference):$(params.new_branch_name) -m "Add asset-hub metadata." -a asset-hub.metadata
+          echo "Done."

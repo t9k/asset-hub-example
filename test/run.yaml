@@ -1,0 +1,34 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: retrain-hash-code
+  labels:
+    batch.tensorstack.dev/workflowTemplate: asset-hub-retrain
+spec:
+  params:
+    - name: git_repo_url
+      value: https://ghproxy.com/https://github.com/t9k/asset-hub-example
+    - name: git_token
+      value: ""
+    - name: subpath
+      value: "."
+    - name: dataset_reference
+      value: xyx/dataset/mnist/mnist:main
+    - name: new_branch_name
+      value: wangdi-1101
+    - name: pvc_name
+      value: retrain-pvc
+    - name: model_id # merge model_id and new_branch_name
+      value: d95aafa2-4988-4ca9-a83e-bbe76e86175a
+    - name: revision
+      value: wangdi/10.20
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: asset-hub-retrain
+  workspaces:
+    - name: pvc
+      persistentVolumeClaim:
+        claimName: retrain-pvc
+    - name: t9k-sdk-config
+      secret:
+        secretName: t9k-sdk-config

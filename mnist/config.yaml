@@ -1,0 +1,2 @@
+train:
+  files: [workflow-train.yaml]
