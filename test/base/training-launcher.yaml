@@ -1,0 +1,92 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: asset-hub-train
+  labels: {}
+spec:
+  params:
+    - name: git_repo_url
+    - name: git_subpath
+    - name: revision
+    - name: git_token
+    - name: dataset_reference
+    - name: pvc_name
+    - name: new_branch_name
+    - name: model_id
+  workspaces:
+    - name: pvc
+    - name: t9k-sdk-config
+  results: []
+  type: DAG
+  dag:
+    failureStrategy: StopAllWorkflowTemplates
+    templates:
+      - name: git-clone
+        workflowTemplateRef: git-clone
+        params:
+          - name: url
+            value: $(params.git_repo_url)
+          - name: revision
+            value: $(params.revision)
+          - name: token
+            value: $(params.git_token)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+        retries: 3
+        when: []
+        dependencies: []
+      - name: download-dataset
+        workflowTemplateRef: download-asset
+        params:
+          - name: reference
+            value: $(params.dataset_reference)
+          - name: subpath
+            value: dataset/
+        workspaces:
+          - name: pvc
+            workspace: pvc
+          - name: t9k-sdk-config
+            workspace: t9k-sdk-config
+        retries: 3
+        when: []
+        dependencies: []
+      - name: apply-k8s-yaml
+        workflowTemplateRef: apply-k8s-yaml
+        params:
+          - name: subpath
+            value: "$(templates.git-clone.results.repo-name)/$(params.git_subpath)"
+          - name: pvc_name
+            value: $(params.pvc_name)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+        retries: 0
+        when: []
+        dependencies:
+          - git-clone
+          - download-dataset
+      - name: upload-model
+        workflowTemplateRef: upload-model
+        params:
+          - name: new_branch_name
+            value: $(params.new_branch_name)
+          - name: reference
+            value: $(params.model_id)
+          - name: git_repo_url
+            value: $(params.git_repo_url)
+          - name: git_subpath
+            value: $(params.git_subpath)
+          - name: dataset_reference
+            value: $(params.dataset_reference)
+          - name: revision
+            value: $(params.revision)
+        workspaces:
+          - name: pvc
+            workspace: pvc
+          - name: t9k-sdk-config
+            workspace: t9k-sdk-config
+        retries: 0
+        when: []
+        dependencies:
+          - apply-k8s-yaml

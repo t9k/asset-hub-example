@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-quota
+spec:
+  selector:
+    matchLabels:
+      app: event-controller
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: event-controller
+        tensorstack.dev/component: project
+        tensorstack.dev/component-type: user
+    spec:
+      containers:
+        - name: high-priority
+          image: ubuntu
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do echo hello; sleep 10;done"]
+          resources:
+            requests:
+              memory: "1000Gi"
+              cpu: "50000"
+            limits:
+              memory: "1000Gi"
+              cpu: "50000"
+      priorityClassName: high

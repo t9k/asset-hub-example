@@ -11,6 +11,9 @@ spec:
       default: demo
     - name: pvc_name
       description: PVC name.
+    - name: usage
+      description: Usage of the workflow.
+      default: train
   workspaces:
     - name: pvc
   results: []
@@ -30,12 +33,14 @@ spec:
           cd $(params.subpath)
 
           while read -r line; do
-            yq '. | select(.kind != "WorkflowRun")'  ${line} | sed 's/$(pvc-name)/$(params.pvc_name)/' | kubectl apply -n $(params.namespace) -f -
-            runs=$(yq 'select(.kind == "WorkflowRun") | del(.metadata.name) | .metadata.generateName = "training-"' ${line} | sed 's/$(pvc-name)/$(params.pvc_name)/' | kubectl create -n $(params.namespace) -f - | awk -F'[/ ]' '{ print $2 }')
+            yq '. | select(.kind != "WorkflowRun")'  ${line} | sed 's/$(pvc-name)/$(params.pvc_name)/' | kubectl apply -f -
+            # runs=$(yq 'select(.kind == "WorkflowRun") | del(.metadata.name) | .metadata.generateName = "training-" | .spec.serviceAccountName = "training-account"' ${line} | sed 's/$(pvc-name)/$(params.pvc_name)/' | kubectl create -f - | awk -F'[/ ]' '{ print $2 }')
+            # for test
+            runs=$(yq 'select(.kind == "WorkflowRun") | del(.metadata.name) | .metadata.generateName = "training-"' ${line} | sed 's/$(pvc-name)/$(params.pvc_name)/' | kubectl create -f - | awk -F'[/ ]' '{ print $2 }')
             
             echo "Create runs: ${runs[@]}"
             allRun+=(${runs[@]})
-          done < <(yq '.train.files[]' config.yaml)
+          done < <(yq ".$(params.usage).files[]" config.yaml)
 
           exit_code=0
           for run in "${allRun[@]}"
@@ -50,7 +55,7 @@ spec:
                 exit_code=1
                 break
               fi
-            done < <(kubectl get workflowruns.batch.tensorstack.dev ${run} -n demo -w)
+            done < <(kubectl get workflowruns.batch.tensorstack.dev ${run} -w)
             if [[ $exit_code -ne 0 ]]; then
               break
             fi

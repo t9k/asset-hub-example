@@ -22,7 +22,7 @@ spec:
       fieldSelector: status.phase==Failed
     manifest: |
       apiVersion: batch.tensorstack.dev/v1beta1
-      kind: PyTorchevaluateingJob
+      kind: PyTorchTrainingJob
       metadata:
         generateName: model-evaluate-
       spec:
