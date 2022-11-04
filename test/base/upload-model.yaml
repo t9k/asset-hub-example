@@ -20,7 +20,7 @@ spec:
       default: "new_branch"
     - name: subpath
       description: PVC subpath under which the files are uploaded.
-      default: "model/"
+      default: "saved_model/"
   workspaces:
     - name: pvc
     - name: t9k-sdk-config
@@ -28,7 +28,7 @@ spec:
   type: SeqPod
   seqPod:
     steps:
-      - image: "tsz.io/t9k/build-sdk:20221101-2"
+      - image: "tsz.io/t9k/build-sdk:20221118-t9kuser"
         name: upload-model
         resources:
           limits:
@@ -48,9 +48,8 @@ spec:
               exit 1
           fi
 
-          echo "Uploading model to s3://$(params.model_id) ..."
           ah create branch $(params.reference):$(params.new_branch_name)
-          ah commit $(params.reference):$(params.new_branch_name) -m "retrain" -a $(params.subpath)
+          ah commit $(params.reference):$(params.new_branch_name) -m "retrain" -a $(params.subpath)/*
 
           echo "{
             \"code\": {

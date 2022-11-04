@@ -49,12 +49,17 @@ spec:
 
           url=$(params.url)
           # not support fine-grained token
+          set +x
           if [[ "$(params.token)" != "" ]]; then
-            url=$(echo $(params.url)| sed "s#\(.*\)://#\1://${params.token}@#")
+            url=$(echo $(params.url)| sed "s#\(.*\)://#\1://$(params.token)@#")
           fi
 
+          dirname=$(basename $(params.url))
+          rm -rf ${dirname}
           git clone $depthoption "$url"
-          cd $(basename $(params.url))
+          set -x
+
+          cd ${dirname}
           git checkout $(params.revision)
 
-          echo -n $(basename $(params.url)) > $(results.repo-name.path)
+          echo -n ${dirname} > $(results.repo-name.path)

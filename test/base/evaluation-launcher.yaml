@@ -1,18 +1,17 @@
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowTemplate
 metadata:
-  name: asset-hub-retrain
+  name: asset-hub-evaluation
   labels: {}
 spec:
   params:
     - name: git_repo_url
-    - name: dataset_reference
     - name: git_subpath
-    - name: new_branch_name
-    - name: pvc_name
-    - name: model_id
     - name: revision
     - name: git_token
+    - name: dataset_reference
+    - name: model_reference
+    - name: pvc_name
   workspaces:
     - name: pvc
     - name: t9k-sdk-config
@@ -37,10 +36,27 @@ spec:
         when: []
         dependencies: []
       - name: download-dataset
-        workflowTemplateRef: download-dataset
+        workflowTemplateRef: download-asset
         params:
           - name: reference
             value: $(params.dataset_reference)
+          - name: subpath
+            value: dataset/
+        workspaces:
+          - name: pvc
+            workspace: pvc
+          - name: t9k-sdk-config
+            workspace: t9k-sdk-config
+        retries: 3
+        when: []
+        dependencies: []
+      - name: download-model
+        workflowTemplateRef: download-asset
+        params:
+          - name: reference
+            value: $(params.model_reference)
+          - name: subpath
+            value: model/
         workspaces:
           - name: pvc
             workspace: pvc
@@ -56,6 +72,8 @@ spec:
             value: "$(templates.git-clone.results.repo-name)/$(params.git_subpath)"
           - name: pvc_name
             value: $(params.pvc_name)
+          - name: usage
+            value: evaluate
         workspaces:
           - name: pvc
             workspace: pvc
@@ -64,21 +82,14 @@ spec:
         dependencies:
           - git-clone
           - download-dataset
-      - name: upload-model
-        workflowTemplateRef: upload-model
+          - download-model
+      - name: upload-metrics
+        workflowTemplateRef: upload-metrics
         params:
-          - name: new_branch_name
-            value: $(params.new_branch_name)
           - name: reference
-            value: $(params.model_id)
-          - name: git_repo_url
-            value: $(params.git_repo_url)
-          - name: git_subpath
-            value: $(params.git_subpath)
+            value: $(params.model_reference)
           - name: dataset_reference
             value: $(params.dataset_reference)
-          - name: revision
-            value: $(params.revision)
         workspaces:
           - name: pvc
             workspace: pvc

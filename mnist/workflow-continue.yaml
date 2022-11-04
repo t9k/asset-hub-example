@@ -102,7 +102,7 @@ metadata:
 spec:
   params:
     - name: command
-      value: "python train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ~/dataset --save_path ~/saved_model/model_state_dict.pt"
+      value: "python train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ~/dataset --save_path ~/saved_model/model_state_dict.pt --load_path ~/model/model_state_dict.pt"
     - name: working_dir
       value: asset-hub-example/mnist
     - name: image
