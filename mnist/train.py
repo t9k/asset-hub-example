@@ -54,6 +54,11 @@ parser.add_argument('--save_path',
                     type=str,
                     default=None,
                     help='Save path of the trained model.')
+parser.add_argument(
+    '--load_path',
+    type=str,
+    default=None,
+    help='Load path of the trained model used to continue training.')
 parser.add_argument('--trial_name',
                     type=str,
                     default='mnist_torch_distributed',
@@ -202,6 +207,8 @@ if __name__ == '__main__':
 
     model = Net().to(device)
     model = DDP(model)
+    if args.load_path:
+        model.module.load_state_dict(torch.load(args.load_path))
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=params['learning_rate'])
     scheduler = StepLR(optimizer, step_size=1, gamma=0.7)
