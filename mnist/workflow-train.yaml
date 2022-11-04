@@ -106,7 +106,7 @@ spec:
     - name: working_dir
       value: asset-hub-example/mnist
     - name: image
-      value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
+      value: registry.tensorstack.cn/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
     - name: request_cpu
       value: 4000m
     - name: request_memory

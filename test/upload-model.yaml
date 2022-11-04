@@ -28,7 +28,7 @@ spec:
   type: SeqPod
   seqPod:
     steps:
-      - image: "tsz.io/t9k/build-sdk:20221101-2"
+      - image: "registry.tensorstack.cn/t9k/build-sdk:20221101-2"
         name: upload-model
         resources:
           limits:

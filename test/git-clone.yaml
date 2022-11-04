@@ -29,7 +29,7 @@ spec:
   type: SeqPod
   seqPod:
     steps:
-      - image: "tsz.io/t9k/build-sdk:1.60.0-t9kuser"
+      - image: "registry.tensorstack.cn/t9k/build-sdk:1.60.0-t9kuser"
         name: get-dataset
         resources:
           limits:

@@ -40,7 +40,7 @@ parser.add_argument(
 parser.add_argument(
     '--host',
     type=str,
-    default='https://proxy.nc201.kube.tensorstack.net/t9k/aimd/server',
+    default='https://home.nsfocus.t9kcloud.cn/t9k/aimd/server',
     help='URL of AIMD server. Required if --aimd is set.')
 parser.add_argument('--log_dir',
                     type=str,

@@ -17,7 +17,7 @@ spec:
   type: SeqPod
   seqPod:
     steps:
-      - image: "tsz.io/t9k/kubectl:10.25"
+      - image: "registry.tensorstack.cn/t9k/kubectl:10.25"
         name: kubectl-apply
         resources:
           limits:
