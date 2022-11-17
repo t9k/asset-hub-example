@@ -1,0 +1,92 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: evaluate-pytorch
+spec:
+  params:
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: request_cpu
+    - name: request_memory
+    - name: limit_cpu
+    - name: limit_memory
+    - name: pvc_name
+  workspaces: []
+  results: []
+  type: Resource
+  resource:
+    successRules:
+      fieldSelector: status.phase==Succeeded
+    failureRules:
+      fieldSelector: status.phase==Failed
+    manifest: |
+      apiVersion: batch.tensorstack.dev/v1beta1
+      kind: PyTorchevaluateingJob
+      metadata:
+        generateName: model-evaluate-
+      spec:
+        runPolicy:
+          cleanUpPolicy: Unfinished
+          backoffLimit: 5           # 所有Pod最多共重启20次
+        replicaSpecs:
+          - type: master
+            replicas: 1
+            restartPolicy: OnFailure
+            template:
+              spec:
+                securityContext:
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: /t9k/mnt/$(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: pytorch
+                    resources:
+                      requests:
+                        cpu: $(params.request_cpu)
+                        memory: $(params.request_memory)
+                      limits:
+                        cpu: $(params.limit_cpu)
+                        memory: $(params.limit_memory)
+                    volumeMounts:
+                      - mountPath: /t9k/mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+
+---
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: evaluate-pytorch
+  labels:
+    batch.tensorstack.dev/workflowTemplate: evaluate-pytorch
+spec:
+  params:
+    - name: command
+      value: "python evaluate.py --no_cuda --dataset_dir ~/dataset --load_path ~/model/model_state_dict.pt --output_dir ~/results"
+    - name: working_dir
+      value: asset-hub-example/mnist
+    - name: image
+      value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
+    - name: request_cpu
+      value: 2000m
+    - name: request_memory
+      value: 2Gi
+    - name: limit_cpu
+      value: 4000m
+    - name: limit_memory
+      value: 4Gi
+    - name: pvc_name
+      value: $(pvc-name)
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: evaluate-pytorch
+  workspaces: []

@@ -1,5 +1,4 @@
 import argparse
-from datetime import datetime
 import json
 import logging
 import os
@@ -13,7 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_dir',
                     type=str,
                     default='./data',
-                    help='Path of directory of the dataset.')
+                    help='Path of the dataset.')
 parser.add_argument('--no_cuda',
                     action='store_true',
                     default=False,
@@ -24,7 +23,7 @@ parser.add_argument('--load_path',
                     help='Load path of the trained model.')
 parser.add_argument('--output_dir',
                     type=str,
-                    default='./metrics',
+                    default='./results',
                     help='Path of output directory of the evaluation metrics.')
 
 logger = logging.getLogger('print')
@@ -34,6 +33,7 @@ logger.propagate = False
 
 
 class Net(nn.Module):
+
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(1, params['conv_channels1'],
@@ -87,16 +87,14 @@ if __name__ == '__main__':
     args.load_path = os.path.expanduser(args.load_path)
     args.output_dir = os.path.expanduser(args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
-    output_path = os.path.join(
-        args.output_dir,
-        datetime.now().strftime('%y%m%d_%H%M%S') + '.json')
+    output_path = os.path.join(args.output_dir, 'metrics.json')
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     if use_cuda:
-        logger.info('NVIDIA_VISIBLE_DEVICES: {}'.format(
-            os.getenv('NVIDIA_VISIBLE_DEVICES')))
-        logger.info('T9K_GPU_PERCENT: {}'.format(os.getenv('T9K_GPU_PERCENT')))
-        logger.info('Device Name {}'.format(torch.cuda.get_device_name()))
+        logger.info('NVIDIA_VISIBLE_DEVICES: %s',
+                    os.getenv('NVIDIA_VISIBLE_DEVICES'))
+        logger.info('T9K_GPU_PERCENT: %s', os.getenv('T9K_GPU_PERCENT'))
+        logger.info('Device Name %s', torch.cuda.get_device_name())
     device = torch.device('cuda' if use_cuda else 'cpu')
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
