@@ -79,11 +79,11 @@ spec:
     - name: request_cpu
       value: 2000m
     - name: request_memory
-      value: 2Gi
+      value: 4Gi
     - name: limit_cpu
       value: 4000m
     - name: limit_memory
-      value: 4Gi
+      value: 8Gi
     - name: pvc_name
       value: $(pvc-name)
   serviceAccountName: managed-project-sa
