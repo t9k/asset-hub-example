@@ -3,7 +3,7 @@ kind: WorkflowRun
 metadata:
   name: train-hash-code
   labels:
-    batch.tensorstack.dev/workflowTemplate: asset-hub-train
+    batch.tensorstack.dev/workflowTemplate: asset-hub-retrain
 spec:
   params:
     - name: git_repo_url
@@ -14,8 +14,10 @@ spec:
       value: "mnist"
     - name: dataset_reference
       value: xyx/dataset/mnist/mnist:main
+    - name: model_reference
+      value: wangdi/model/f1/a1:wangdi-1102
     - name: new_branch_name
-      value: wangdi-110401
+      value: wangdi-1104
     - name: pvc_name
       value: train-pvc
     - name: model_id # merge model_id and new_branch_name
@@ -24,7 +26,7 @@ spec:
       value: wangdi/11.4
   serviceAccountName: managed-project-sa
   timeout: 1h0m0s
-  workflowTemplateRef: asset-hub-train
+  workflowTemplateRef: asset-hub-continue
   workspaces:
     - name: pvc
       persistentVolumeClaim:

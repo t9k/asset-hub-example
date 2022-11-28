@@ -4,17 +4,11 @@ metadata:
   name: upload-metrics
 spec:
   params:
-    - name: git_repo_url
-      description: URL of the git repo to store code.
-    - name: git_subpath
-      description: Git repo subpath.
-    - name: revision
-      description: Git revision.
-      default: "master"
-    - name: dataset_reference
-      description: Reference of the dataset used.
     - name: reference
       description: Reference of the model to evaluate.
+    - name: dataset_reference
+      description: Reference of the dataset to evaluate.
+      default: ""
     - name: file_path
       description: Path of the JSON or YAML file of metrics.
       default: "results/metrics.json"
@@ -25,7 +19,7 @@ spec:
   type: SeqPod
   seqPod:
     steps:
-      - image: "tsz.io/t9k/build-sdk:20221118"
+      - image: "tsz.io/t9k/build-sdk:20221118-t9kuser"
         name: upload-metrics
         resources:
           limits:

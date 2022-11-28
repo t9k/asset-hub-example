@@ -1,14 +1,14 @@
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowTemplate
 metadata:
-  name: download-dataset
+  name: download-asset
 spec:
   params:
     - name: reference
-      description: Reference of the dataset to download.
+      description: Reference of the asset to download.
     - name: subpath
-      description: PVC subpath that the dataset is downloaded to.
-      default: "dataset/"
+      description: PVC subpath that the asset is downloaded to.
+      default: "asset/"
   workspaces:
     - name: pvc
     - name: t9k-sdk-config
@@ -16,8 +16,8 @@ spec:
   type: SeqPod
   seqPod:
     steps:
-      - image: "tsz.io/t9k/build-sdk:20221101-2"
-        name: download-dataset
+      - image: "tsz.io/t9k/build-sdk:20221118-t9kuser"
+        name: download-asset
         resources:
           limits:
             cpu: 100m
@@ -33,10 +33,10 @@ spec:
               mkdir ~/.t9k
               cp $CONFIG_PATH ~/.t9k
           else
-              echo "Failed to download dataset: file t9k-sdk-config.yaml not found"
+              echo "Failed to download asset: file t9k-sdk-config.yaml not found"
               exit 1
           fi
 
-          echo "Downloading dataset from $(params.reference) ..."
+          echo "Downloading asset from $(params.reference) ..."
           ah download $(params.reference)
           echo "Done."
