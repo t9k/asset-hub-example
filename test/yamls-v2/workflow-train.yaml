@@ -7,11 +7,6 @@ spec:
     - name: command
     - name: working_dir
     - name: image
-    - name: request_cpu
-    - name: request_memory
-    - name: limit_cpu
-    - name: limit_memory
-    - name: worker_num
     - name: pvc_name
   workspaces: []
   results: []
@@ -49,11 +44,11 @@ spec:
                     name: pytorch
                     resources:
                       requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
+                        cpu: 4
+                        memory: 2Gi
                       limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
+                        cpu: 8
+                        memory: 4Gi
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -62,7 +57,7 @@ spec:
                     persistentVolumeClaim:
                       claimName: $(params.pvc_name)
           - type: worker
-            replicas: $(params.worker_num)
+            replicas: 3
             restartPolicy: OnFailure
             template:
               spec:
@@ -79,11 +74,11 @@ spec:
                     name: pytorch
                     resources:
                       requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
+                        cpu: 4
+                        memory: 2Gi
                       limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
+                        cpu: 8
+                        memory: 4Gi
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -107,16 +102,6 @@ spec:
       value: asset-hub-example/mnist
     - name: image
       value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
-    - name: request_cpu
-      value: 4000m
-    - name: request_memory
-      value: 2Gi
-    - name: limit_cpu
-      value: 8000m
-    - name: limit_memory
-      value: 4Gi
-    - name: worker_num
-      value: "3"
     - name: pvc_name
       value: $(pvc-name)
   serviceAccountName: managed-project-sa
