@@ -192,7 +192,7 @@ if __name__ == '__main__':
 
     params = {
         'batch_size': 32 * world_size,
-        'epochs': 10,
+        'epochs': 5,
         'learning_rate': 0.001 * world_size,
         'conv_channels1': 32,
         'conv_channels2': 64,
