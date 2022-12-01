@@ -1,7 +1,7 @@
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowTemplate
 metadata:
-  name: train-pytorch
+  name: train-tensorflow
 spec:
   params:
     - name: command
@@ -23,47 +23,21 @@ spec:
       fieldSelector: status.phase==Failed
     manifest: |
       apiVersion: batch.tensorstack.dev/v1beta1
-      kind: PyTorchTrainingJob
+      kind: TensorFlowTrainingJob
       metadata:
         generateName: model-retrain-
       spec:
         runPolicy:
-          cleanUpPolicy: Unfinished
-          backoffLimit: 20           # 所有Pod最多共重启20次
+          cleanUpPolicy: None
+          backoffLimit: 0           # 所有Pod最多共重启0次
+        scheduler:
+          t9kScheduler:
+            queue: a100
+            priority: 10
         replicaSpecs:
-          - type: master
-            replicas: 1
-            restartPolicy: OnFailure
-            template:
-              spec:
-                securityContext:
-                  runAsUser: 1000
-                containers:
-                  - command:
-                      - sh
-                      - '-c'
-                      - $(params.command)
-                    workingDir: /t9k/mnt/$(params.working_dir)
-                    imagePullPolicy: IfNotPresent
-                    image: $(params.image)
-                    name: pytorch
-                    resources:
-                      requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
-                      limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
-                    volumeMounts:
-                      - mountPath: /t9k/mnt
-                        name: data
-                volumes:
-                  - name: data
-                    persistentVolumeClaim:
-                      claimName: $(params.pvc_name)
           - type: worker
             replicas: $(params.worker_num)
-            restartPolicy: OnFailure
+            restartPolicy: Never
             template:
               spec:
                 securityContext:
@@ -73,10 +47,10 @@ spec:
                       - sh
                       - '-c'
                       - $(params.command)
-                    workingDir: /t9k/mnt/$(params.working_dir)
+                    workingDir: $(params.working_dir)
                     imagePullPolicy: IfNotPresent
                     image: $(params.image)
-                    name: pytorch
+                    name: tensorflow
                     resources:
                       requests:
                         cpu: $(params.request_cpu)
@@ -84,6 +58,7 @@ spec:
                       limits:
                         cpu: $(params.limit_cpu)
                         memory: $(params.limit_memory)
+                        tensorstack.dev/nvidia-gpu: 1
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -96,17 +71,17 @@ spec:
 apiVersion: batch.tensorstack.dev/v1beta1
 kind: WorkflowRun
 metadata:
-  name: train-pytorch
+  name: train-tensorflow
   labels:
-    batch.tensorstack.dev/workflowTemplate: train-pytorch
+    batch.tensorstack.dev/workflowTemplate: train-tensorflow
 spec:
   params:
     - name: command
-      value: "python train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ~/dataset --save_path ~/saved_model/model_state_dict.pt"
+      value: "python asset-hub-example/mnist-tensorflow/train.py --log_dir ./log --dataset_dir dataset --save_path saved_model/model_state_dict.pt"
     - name: working_dir
-      value: asset-hub-example/mnist
+      value: /t9k/mnt
     - name: image
-      value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
+      value: registry.tensorstack.cn/t9kmirror/tensorflow:2.8.0 
     - name: request_cpu
       value: 4000m
     - name: request_memory
@@ -116,10 +91,10 @@ spec:
     - name: limit_memory
       value: 4Gi
     - name: worker_num
-      value: "3"
+      value: "2"
     - name: pvc_name
       value: $(pvc-name)
   serviceAccountName: managed-project-sa
   timeout: 1h0m0s
-  workflowTemplateRef: train-pytorch
+  workflowTemplateRef: train-tensorflow
   workspaces: []

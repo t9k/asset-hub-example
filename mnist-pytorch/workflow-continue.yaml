@@ -25,7 +25,7 @@ spec:
       apiVersion: batch.tensorstack.dev/v1beta1
       kind: PyTorchTrainingJob
       metadata:
-        generateName: model-retrain-
+        generateName: model-train-
       spec:
         runPolicy:
           cleanUpPolicy: Unfinished
@@ -43,7 +43,7 @@ spec:
                       - sh
                       - '-c'
                       - $(params.command)
-                    workingDir: /t9k/mnt/$(params.working_dir)
+                    workingDir: $(params.working_dir)
                     imagePullPolicy: IfNotPresent
                     image: $(params.image)
                     name: pytorch
@@ -73,7 +73,7 @@ spec:
                       - sh
                       - '-c'
                       - $(params.command)
-                    workingDir: /t9k/mnt/$(params.working_dir)
+                    workingDir: $(params.working_dir)
                     imagePullPolicy: IfNotPresent
                     image: $(params.image)
                     name: pytorch
@@ -102,11 +102,11 @@ metadata:
 spec:
   params:
     - name: command
-      value: "python train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ~/dataset --save_path ~/saved_model/model_state_dict.pt --load_path ~/model/model_state_dict.pt"
+      value: "python asset-hub-example/mnist-pytorch/train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir dataset --save_path saved_model/model_state_dict.pt --load_path model/model_state_dict.pt"
     - name: working_dir
-      value: asset-hub-example/mnist
+      value: /t9k/mnt
     - name: image
-      value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
+      value: registry.tensorstack.cn/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
     - name: request_cpu
       value: 4000m
     - name: request_memory

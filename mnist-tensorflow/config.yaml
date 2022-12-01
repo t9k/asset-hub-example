@@ -1,0 +1,6 @@
+train:
+  files: [workflow-train.yaml]
+continue:
+  files: [workflow-continue.yaml]
+evaluate:
+  files: [workflow-evaluate.yaml]
