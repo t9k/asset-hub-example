@@ -82,8 +82,10 @@ if __name__ == '__main__':
     dataset_dir=os.path.join(args.dataset_dir,'MNIST','raw')
     test_images, test_labels = mnist_to_numpy(data_dir=dataset_dir, train=False)
 
+    # reshape raw data into 10000 images composed of 28*28*1 pixels
     test_images = test_images.reshape((10000, 28, 28, 1))
-
+    
+    # normalizing pixel values from [0, 255] to [0, 1]
     test_images = test_images / 255.0
 
     test_loss, test_accuracy = model.evaluate(test_images, test_labels, verbose=2)

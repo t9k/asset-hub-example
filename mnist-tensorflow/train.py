@@ -97,8 +97,10 @@ with strategy.scope():
 dataset_dir=os.path.join(args.dataset_dir,'MNIST','raw')
 train_images, train_labels = mnist_to_numpy(data_dir=dataset_dir, train=True)
 
+# reshape raw data into 60000 images composed of 28*28*1 pixels
 train_images = train_images.reshape((60000, 28, 28, 1))
 
+# normalizing pixel values from [0, 255] to [0, 1]
 train_images = train_images / 255.0
 
 # Set save path for TensorBoard log.

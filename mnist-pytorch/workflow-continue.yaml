@@ -28,8 +28,8 @@ spec:
         generateName: model-train-
       spec:
         runPolicy:
-          cleanUpPolicy: Unfinished
-          backoffLimit: 20           # 所有Pod最多共重启20次
+          cleanUpPolicy: None
+          backoffLimit: 0
         replicaSpecs:
           - type: master
             replicas: 1
@@ -37,6 +37,7 @@ spec:
             template:
               spec:
                 securityContext:
+                  # Asset Hub Launcher Workflow use uid 1000 to download git code, data and model
                   runAsUser: 1000
                 containers:
                   - command:
@@ -49,11 +50,11 @@ spec:
                     name: pytorch
                     resources:
                       requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
+                        cpu: 4
+                        memory: 2Gi
                       limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
+                        cpu: 8
+                        memory: 4Gi
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -62,11 +63,12 @@ spec:
                     persistentVolumeClaim:
                       claimName: $(params.pvc_name)
           - type: worker
-            replicas: $(params.worker_num)
+            replicas: 1
             restartPolicy: OnFailure
             template:
               spec:
                 securityContext:
+                  # Asset Hub Launcher Workflow use uid 1000 to download git code, data and model
                   runAsUser: 1000
                 containers:
                   - command:
@@ -79,11 +81,11 @@ spec:
                     name: pytorch
                     resources:
                       requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
+                        cpu: 4
+                        memory: 2Gi
                       limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
+                        cpu: 8
+                        memory: 4Gi
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -107,16 +109,6 @@ spec:
       value: /t9k/mnt
     - name: image
       value: registry.tensorstack.cn/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
-    - name: request_cpu
-      value: 4000m
-    - name: request_memory
-      value: 2Gi
-    - name: limit_cpu
-      value: 8000m
-    - name: limit_memory
-      value: 4Gi
-    - name: worker_num
-      value: "3"
     - name: pvc_name
       value: $(pvc-name)
   serviceAccountName: managed-project-sa

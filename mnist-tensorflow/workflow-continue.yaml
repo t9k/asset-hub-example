@@ -29,11 +29,7 @@ spec:
       spec:
         runPolicy:
           cleanUpPolicy: None
-          backoffLimit: 0           # 所有Pod最多共重启0次
-        scheduler:
-          t9kScheduler:
-            queue: a100
-            priority: 10
+          backoffLimit: 0
         replicaSpecs:
           - type: worker
             replicas: $(params.worker_num)
@@ -41,6 +37,7 @@ spec:
             template:
               spec:
                 securityContext:
+                  # Asset Hub Launcher Workflow use uid 1000 to download git code, data and model
                   runAsUser: 1000
                 containers:
                   - command:
@@ -53,12 +50,11 @@ spec:
                     name: tensorflow
                     resources:
                       requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
+                        cpu: 4
+                        memory: 2Gi
                       limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
-                        tensorstack.dev/nvidia-gpu: 1
+                        cpu: 8
+                        memory: 4Gi
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -77,19 +73,11 @@ metadata:
 spec:
   params:
     - name: command
-      value: "python asset-hub-example/mnist-tensorflow/train.py --log_dir ./log --dataset_dir dataset --save_path saved_model/model_state_dict.pt --load_path model/model_state_dict.pt"
+      value: "python asset-hub-example/mnist-tensorflow/train.py --no_cuda --log_dir ./log --dataset_dir dataset --save_path saved_model/model_state_dict.pt --load_path model/model_state_dict.pt"
     - name: working_dir
       value: /t9k/mnt
     - name: image
-      value: registry.tensorstack.cn/t9kmirror/tensorflow:2.8.0 
-    - name: request_cpu
-      value: 4000m
-    - name: request_memory
-      value: 2Gi
-    - name: limit_cpu
-      value: 8000m
-    - name: limit_memory
-      value: 4Gi
+      value: registry.tensorstack.cn/t9kmirror/tensorflow:2.11.0
     - name: worker_num
       value: "2"
     - name: pvc_name
