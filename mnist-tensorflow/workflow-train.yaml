@@ -1,0 +1,81 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: train-tensorflow
+spec:
+  params:
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: pvc_name
+  workspaces: []
+  results: []
+  type: Resource
+  resource:
+    successRules:
+      fieldSelector: status.phase==Succeeded
+    failureRules:
+      fieldSelector: status.phase==Failed
+    manifest: |
+      apiVersion: batch.tensorstack.dev/v1beta1
+      kind: TensorFlowTrainingJob
+      metadata:
+        generateName: model-retrain-
+      spec:
+        runPolicy:
+          cleanUpPolicy: None
+          backoffLimit: 0
+        replicaSpecs:
+          - type: worker
+            replicas: 2
+            restartPolicy: Never
+            template:
+              spec:
+                securityContext:
+                  # Asset Hub Launcher Workflow use uid 1000 to download git code, data and model
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: $(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: tensorflow
+                    resources:
+                      requests:
+                        cpu: 4
+                        memory: 2Gi
+                      limits:
+                        cpu: 8
+                        memory: 4Gi
+                    volumeMounts:
+                      - mountPath: /t9k/mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+
+---
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: train-tensorflow
+  labels:
+    batch.tensorstack.dev/workflowTemplate: train-tensorflow
+spec:
+  params:
+    - name: command
+      value: "python asset-hub-example/mnist-tensorflow/train.py --no_cuda --log_dir ./log --dataset_dir dataset --save_path saved_model/model_state_dict.pt"
+    - name: working_dirs
+      value: /t9k/mnt
+    - name: image
+      value: registry.tensorstack.cn/t9kmirror/tensorflow:2.11.0
+    - name: pvc_name
+      value: $(pvc-name)
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: train-tensorflow
+  workspaces: []

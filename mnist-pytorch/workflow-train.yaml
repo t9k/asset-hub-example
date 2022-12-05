@@ -7,11 +7,6 @@ spec:
     - name: command
     - name: working_dir
     - name: image
-    - name: request_cpu
-    - name: request_memory
-    - name: limit_cpu
-    - name: limit_memory
-    - name: worker_num
     - name: pvc_name
   workspaces: []
   results: []
@@ -28,8 +23,8 @@ spec:
         generateName: model-retrain-
       spec:
         runPolicy:
-          cleanUpPolicy: Unfinished
-          backoffLimit: 20           # 所有Pod最多共重启20次
+          cleanUpPolicy: None
+          backoffLimit: 0
         replicaSpecs:
           - type: master
             replicas: 1
@@ -37,23 +32,24 @@ spec:
             template:
               spec:
                 securityContext:
+                  # Asset Hub Launcher Workflow use uid 1000 to download git code, data and model
                   runAsUser: 1000
                 containers:
                   - command:
                       - sh
                       - '-c'
                       - $(params.command)
-                    workingDir: /t9k/mnt/$(params.working_dir)
+                    workingDir: $(params.working_dir)
                     imagePullPolicy: IfNotPresent
                     image: $(params.image)
                     name: pytorch
                     resources:
                       requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
+                        cpu: 4
+                        memory: 2Gi
                       limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
+                        cpu: 8
+                        memory: 4Gi
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -62,28 +58,29 @@ spec:
                     persistentVolumeClaim:
                       claimName: $(params.pvc_name)
           - type: worker
-            replicas: $(params.worker_num)
+            replicas: 1
             restartPolicy: OnFailure
             template:
               spec:
                 securityContext:
+                  # Asset Hub Launcher Workflow use uid 1000 to download git code, data and model
                   runAsUser: 1000
                 containers:
                   - command:
                       - sh
                       - '-c'
                       - $(params.command)
-                    workingDir: /t9k/mnt/$(params.working_dir)
+                    workingDir: $(params.working_dir)
                     imagePullPolicy: IfNotPresent
                     image: $(params.image)
                     name: pytorch
                     resources:
                       requests:
-                        cpu: $(params.request_cpu)
-                        memory: $(params.request_memory)
+                        cpu: 4
+                        memory: 2Gi
                       limits:
-                        cpu: $(params.limit_cpu)
-                        memory: $(params.limit_memory)
+                        cpu: 8
+                        memory: 4Gi
                     volumeMounts:
                       - mountPath: /t9k/mnt
                         name: data
@@ -102,21 +99,11 @@ metadata:
 spec:
   params:
     - name: command
-      value: "python train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ~/dataset --save_path ~/saved_model/model_state_dict.pt --load_path ~/model/model_state_dict.pt"
+      value: "python asset-hub-example/mnist-pytorch/train.py --backend gloo --no_cuda --log_dir ./log --dataset_dir ./dataset --save_path ./saved_model/model_state_dict.pt"
     - name: working_dir
-      value: asset-hub-example/mnist
+      value: /t9k/mnt
     - name: image
-      value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
-    - name: request_cpu
-      value: 4000m
-    - name: request_memory
-      value: 2Gi
-    - name: limit_cpu
-      value: 8000m
-    - name: limit_memory
-      value: 4Gi
-    - name: worker_num
-      value: "3"
+      value: registry.tensorstack.cn/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
     - name: pvc_name
       value: $(pvc-name)
   serviceAccountName: managed-project-sa

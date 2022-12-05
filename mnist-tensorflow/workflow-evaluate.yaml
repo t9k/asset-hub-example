@@ -1,0 +1,81 @@
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowTemplate
+metadata:
+  name: evaluate-tensorflow
+spec:
+  params:
+    - name: command
+    - name: working_dir
+    - name: image
+    - name: pvc_name
+  workspaces: []
+  results: []
+  type: Resource
+  resource:
+    successRules:
+      fieldSelector: status.phase==Succeeded
+    failureRules:
+      fieldSelector: status.phase==Failed
+    manifest: |
+      apiVersion: batch.tensorstack.dev/v1beta1
+      kind: TensorFlowTrainingJob
+      metadata:
+        generateName: model-evaluate-
+      spec:
+        runPolicy:
+          cleanUpPolicy: None
+          backoffLimit: 0
+        replicaSpecs:
+          - type: worker
+            replicas: 1
+            restartPolicy: OnFailure
+            template:
+              spec:
+                securityContext:
+                  # Asset Hub Launcher Workflow use uid 1000 to download git code, data and model
+                  runAsUser: 1000
+                containers:
+                  - command:
+                      - sh
+                      - '-c'
+                      - $(params.command)
+                    workingDir: $(params.working_dir)
+                    imagePullPolicy: IfNotPresent
+                    image: $(params.image)
+                    name: tensorflow
+                    resources:
+                      requests:
+                        cpu: 2
+                        memory: 2Gi
+                      limits:
+                        cpu: 4
+                        memory: 4Gi
+                    volumeMounts:
+                      - mountPath: /t9k/mnt
+                        name: data
+                volumes:
+                  - name: data
+                    persistentVolumeClaim:
+                      claimName: $(params.pvc_name)
+
+---
+apiVersion: batch.tensorstack.dev/v1beta1
+kind: WorkflowRun
+metadata:
+  name: evaluate-tensorflow
+  labels:
+    batch.tensorstack.dev/workflowTemplate: evaluate-tensorflow
+spec:
+  params:
+    - name: command
+      value: "python asset-hub-example/mnist-tensorflow/evaluate.py --no_cuda --dataset_dir dataset --load_path model/model_state_dict.pt --output_dir results"
+    - name: working_dir
+      value: /t9k/mnt
+    - name: image
+      value: registry.tensorstack.cn/t9kmirror/tensorflow:2.11.0
+    - name: pvc_name
+      value: $(pvc-name)
+  serviceAccountName: managed-project-sa
+  timeout: 1h0m0s
+  workflowTemplateRef: evaluate-tensorflow
+  workspaces: []
