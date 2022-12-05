@@ -7,11 +7,6 @@ spec:
     - name: command
     - name: working_dir
     - name: image
-    - name: request_cpu
-    - name: request_memory
-    - name: limit_cpu
-    - name: limit_memory
-    - name: worker_num
     - name: pvc_name
   workspaces: []
   results: []
@@ -32,7 +27,7 @@ spec:
           backoffLimit: 0
         replicaSpecs:
           - type: worker
-            replicas: $(params.worker_num)
+            replicas: 2
             restartPolicy: Never
             template:
               spec:
@@ -78,8 +73,6 @@ spec:
       value: /t9k/mnt
     - name: image
       value: registry.tensorstack.cn/t9kmirror/tensorflow:2.11.0
-    - name: worker_num
-      value: "2"
     - name: pvc_name
       value: $(pvc-name)
   serviceAccountName: managed-project-sa

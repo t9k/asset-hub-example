@@ -7,10 +7,6 @@ spec:
     - name: command
     - name: working_dir
     - name: image
-    - name: request_cpu
-    - name: request_memory
-    - name: limit_cpu
-    - name: limit_memory
     - name: pvc_name
   workspaces: []
   results: []
