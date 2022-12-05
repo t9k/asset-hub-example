@@ -103,7 +103,7 @@ spec:
     - name: working_dir
       value: /t9k/mnt
     - name: image
-      value: registry.tensorstack.cn/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
+      value: tsz.io/t9k/pytorch-1.12.1:sdk-0.4.0-t9kuser
     - name: pvc_name
       value: $(pvc-name)
   serviceAccountName: managed-project-sa
