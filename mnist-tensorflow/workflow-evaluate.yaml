@@ -24,7 +24,7 @@ spec:
       spec:
         runPolicy:
           cleanUpPolicy: None
-          backoffLimit: 0
+          backoffLimit: 1
         replicaSpecs:
           - type: worker
             replicas: 1
