@@ -20,7 +20,7 @@ spec:
       apiVersion: batch.tensorstack.dev/v1beta1
       kind: TensorFlowTrainingJob
       metadata:
-        generateName: model-retrain-
+        generateName: model-train-
       spec:
         runPolicy:
           cleanUpPolicy: None
